@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>專屬會員卡</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 20px; background-color: #f4f4f4;}
+        .card { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-top: 20px;}
+        .valid { border-top: 5px solid #4CAF50; }
+        .invalid { border-top: 5px solid #F44336; }
+        #clock { font-size: 20px; font-weight: bold; color: #333; margin-top: 15px; }
+        .warning { color: red; }
+        .uid-box { margin-top: 15px; font-size: 12px; color: #888; word-break: break-all; }
+        .error-box { color: #F44336; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h2>會員狀態查詢</h2>
+    <div id="loading">載入中，請稍候...</div>
+    <div id="error-container" class="error-box" style="display:none;"></div>
+
+    <div id="card-container" class="card" style="display: none;">
+        <h3 id="member-name"></h3>
+        <p id="member-status"></p>
+        <!-- 動態時鐘：不是真的技術防截圖，只是讓截圖帶有時間戳，
+             舊截圖拿去重複使用時，時間會對不上而被識破 -->
+        <div id="clock"></div>
+        <div id="uid-box" class="uid-box" style="display:none;"></div>
+    </div>
+
+    <script>
+        // 請替換成你自己的值
+        const LIFF_ID = "2011703761-8WXeFeSP";
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbzNrG5_5j7C_ZKsPsuGd5naglsG-iUTM_dpjH4nbUA8VbNF32kFa1rAE436Sb_rNa5C/exec";
+
+        function pad(n) { return n < 10 ? '0' + n : n; }
+
+        function formatQueryTime(d) {
+            return "查詢時間：" + d.getFullYear() + "年" + (d.getMonth() + 1) + "月" + d.getDate() + "日 "
+                 + pad(d.getHours()) + "時" + pad(d.getMinutes()) + "分" + pad(d.getSeconds()) + "秒";
+        }
+
+        function startClock() {
+            const clockEl = document.getElementById('clock');
+            clockEl.innerText = formatQueryTime(new Date()); // 先立刻顯示一次，不用等 1 秒
+            setInterval(() => {
+                clockEl.innerText = formatQueryTime(new Date());
+            }, 1000);
+        }
+
+        function showError(msg) {
+            document.getElementById('loading').style.display = 'none';
+            const box = document.getElementById('error-container');
+            box.style.display = 'block';
+            box.innerText = msg;
+        }
+
+        async function main() {
+            try {
+                await liff.init({ liffId: LIFF_ID });
+            } catch (err) {
+                showError("初始化失敗，請確認是否在 LINE App 內開啟此頁面。");
+                return;
+            }
+
+            if (!liff.isLoggedIn()) {
+                liff.login();
+                return; // login 會重新導向，不用繼續往下執行
+            }
+
+            try {
+                const profile = await liff.getProfile();
+                checkMembership(profile.userId);
+            } catch (err) {
+                showError("無法取得使用者資料，請重新開啟此頁面再試一次。");
+            }
+        }
+
+        function checkMembership(uid) {
+            fetch(`${GAS_URL}?uid=${encodeURIComponent(uid)}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error("HTTP " + response.status);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    document.getElementById('loading').style.display = 'none';
+                    const card = document.getElementById('card-container');
+                    card.style.display = 'block';
+
+                    if (data.success) {
+                        card.classList.add('valid');
+                        document.getElementById('member-name').innerText = data.name + "，您好！";
+                        document.getElementById('member-status').innerText = "✅ 狀態：有效會員（已繳費）";
+                        startClock();
+                    } else {
+                        card.classList.add('invalid');
+                        document.getElementById('member-name').innerText = "系統通知";
+                        document.getElementById('member-status').innerText = "❌ " + data.message;
+                        document.getElementById('member-status').classList.add('warning');
+
+                        // 找不到會員資料時，顯示 UID 讓使用者回傳給管理員做首次綁定
+                        if (data.uid) {
+                            const uidBox = document.getElementById('uid-box');
+                            uidBox.style.display = 'block';
+                            uidBox.innerText = "請將以下代碼截圖傳給管理員完成綁定：" + data.uid;
+                        }
+                    }
+                })
+                .catch(err => {
+                    showError("連線錯誤，請檢查網路後重新開啟此頁面。");
+                });
+        }
+
+        main();
+    </script>
+</body>
+</html>

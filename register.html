@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>會員註冊與綁定</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background-color: #f4f4f4; }
+        h2 { text-align: center; }
+        label { display: block; margin-top: 12px; margin-bottom: 4px; font-size: 14px; color: #555; }
+        input { display: block; width: 100%; box-sizing: border-box; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; }
+        button { width: 100%; margin-top: 20px; padding: 15px; font-size: 18px; background-color: #00c300; color: white; border: none; border-radius: 5px; }
+        button:disabled { background-color: #999; }
+        #status { color: #F44336; margin-top: 12px; text-align: center; }
+    </style>
+</head>
+<body>
+    <h2>會員註冊 / 舊會員綁定</h2>
+    <p>請輸入您的資料，系統將自動為您綁定 LINE 帳號。</p>
+
+    <label>會員編號（舊會員請填寫原編號；新會員可先留空，由管理員後補）</label>
+    <input type="text" id="memberId" placeholder="例如：1">
+
+    <label>真實姓名</label>
+    <input type="text" id="name" placeholder="請輸入姓名">
+
+    <label>手機號碼</label>
+    <input type="tel" id="phone" placeholder="請輸入手機號碼">
+
+    <button id="submitBtn" onclick="submitForm()">確認綁定</button>
+    <p id="status"></p>
+
+    <script>
+        // 這裡請填入「專門給註冊頁面用」的 LIFF ID（跟會員卡的 LIFF ID 不是同一個）
+        const LIFF_ID = "YOUR_REGISTER_LIFF_ID";
+
+        // 這裡填入跟 index.html 相同的 GAS 網址
+        const GAS_API_URL = "YOUR_GAS_API_URL";
+
+        let userUid = "";
+
+        function showStatus(msg) {
+            document.getElementById("status").innerText = msg;
+        }
+
+        async function initializeLiff() {
+            try {
+                await liff.init({ liffId: LIFF_ID });
+                if (liff.isLoggedIn()) {
+                    const profile = await liff.getProfile();
+                    userUid = profile.userId;
+                } else {
+                    liff.login();
+                }
+            } catch (err) {
+                showStatus("LIFF 初始化失敗，請確認是否在 LINE App 內開啟此頁面。");
+            }
+        }
+
+        async function submitForm() {
+            if (!userUid) {
+                showStatus("無法取得 LINE 帳號資訊，請確認在 LINE 內部開啟此頁面。");
+                return;
+            }
+
+            const memberId = document.getElementById("memberId").value.trim();
+            const name = document.getElementById("name").value.trim();
+            const phone = document.getElementById("phone").value.trim();
+
+            if (!memberId || !name || !phone) {
+                showStatus("請完整填寫所有資料！");
+                return;
+            }
+
+            const btn = document.getElementById("submitBtn");
+            btn.innerText = "資料傳送中...";
+            btn.disabled = true;
+            showStatus("");
+
+            try {
+                // 注意：這裡故意不設定 Content-Type 標頭。
+                // 如果手動加上 'Content-Type': 'application/json'，瀏覽器會先送出
+                // CORS 的 OPTIONS 預檢請求，但 Google Apps Script 不會回應 OPTIONS，
+                // 反而會讓整個請求失敗。維持預設標頭，GAS 一樣能正確讀到內容。
+                const response = await fetch(GAS_API_URL, {
+                    method: "POST",
+                    body: JSON.stringify({ uid: userUid, memberId: memberId, name: name, phone: phone })
+                });
+
+                if (!response.ok) {
+                    throw new Error("HTTP " + response.status);
+                }
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showStatus(result.message);
+                    setTimeout(() => {
+                        try { liff.closeWindow(); } catch (e) {}
+                    }, 1500);
+                } else {
+                    showStatus("發生錯誤：" + result.message);
+                }
+            } catch (err) {
+                showStatus("連線失敗，請稍後再試。");
+            } finally {
+                btn.innerText = "確認綁定";
+                btn.disabled = false;
+            }
+        }
+
+        initializeLiff();
+    </script>
+</body>
+</html>
