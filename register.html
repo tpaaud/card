@@ -28,15 +28,16 @@
     <label>手機號碼</label>
     <input type="tel" id="phone" placeholder="請輸入手機號碼">
 
-    <button id="submitBtn" onclick="submitForm()">確認綁定</button>
+    <button id="submitBtn" onclick="submitForm()" disabled>準備中，請稍候...</button>
     <p id="status"></p>
+    <p id="debug-info" style="color:#888; font-size:12px; margin-top:20px;"></p>
 
     <script>
         // 這裡請填入「專門給註冊頁面用」的 LIFF ID（跟會員卡的 LIFF ID 不是同一個）
         const LIFF_ID = "2011709650-SKD1MM1M";
 
         // 這裡填入跟 index.html 相同的 GAS 網址
-        const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxfrs4m4LL4EcJ-8o8ihQM7swCJK6Z_9ZSwt07JPR1zv_WkpXV8-xDfUU8ouB5DLjD6/exec";
+        const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxygYmkFT6ndRKYtAU-jjHIxnDuQt1Y8u5WC9HimlXxzxNw4-K7tyuSuG1iYuzcbO3FLQ/exec";
 
         let userUid = "";
 
@@ -44,17 +45,32 @@
             document.getElementById("status").innerText = msg;
         }
 
+        function showDebug(msg) {
+            document.getElementById("debug-info").innerText = msg;
+        }
+
         async function initializeLiff() {
+            const btn = document.getElementById("submitBtn");
             try {
                 await liff.init({ liffId: LIFF_ID });
-                if (liff.isLoggedIn()) {
+
+                const inClient = liff.isInClient();
+                const loggedIn = liff.isLoggedIn();
+                showDebug("偵測狀態｜在LINE內開啟：" + inClient + "｜已登入：" + loggedIn);
+
+                if (loggedIn) {
                     const profile = await liff.getProfile();
                     userUid = profile.userId;
+                    showDebug("偵測狀態｜在LINE內開啟：" + inClient + "｜已登入：" + loggedIn + "｜UID：" + userUid);
+                    btn.disabled = false;
+                    btn.innerText = "確認綁定";
                 } else {
+                    showStatus("尚未登入，正在導向 LINE 登入頁面...");
                     liff.login();
                 }
             } catch (err) {
-                showStatus("LIFF 初始化失敗，請確認是否在 LINE App 內開啟此頁面。");
+                showDebug("初始化發生例外：" + err.message);
+                showStatus("LIFF 初始化失敗，請確認是透過 liff.line.me 連結開啟。");
             }
         }
 
